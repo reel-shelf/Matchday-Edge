@@ -85,11 +85,17 @@ def pop(t):  # overshoot scale
     t = max(0, min(1, t)); s = 1.70158
     return 1 + (s + 1) * (t - 1) ** 3 + s * (t - 1) ** 2
 
-segments = [("hook", None, 2.2)]
-for j in JOKES:
-    words = len(j[2].split()) + (len(j[3].split()) if j[3] else 0)
-    segments.append(("joke", j, round(1.8 + words * 0.22, 2)))
-segments.append(("end", None, 2.5))
+import json, os
+_t = os.environ.get("TIMINGS")
+if _t:
+    durs = json.load(open(_t))  # 12 durations: hook, #10..#1, end
+    segments = [("hook", None, durs[0])] + [("joke", j, d) for j, d in zip(JOKES, durs[1:11])] + [("end", None, durs[11])]
+else:
+    segments = [("hook", None, 2.2)]
+    for j in JOKES:
+        words = len(j[2].split()) + (len(j[3].split()) if j[3] else 0)
+        segments.append(("joke", j, round(1.8 + words * 0.22, 2)))
+    segments.append(("end", None, 2.5))
 total = sum(s[2] for s in segments)
 
 cards = {j[0]: make_card(j[1], j[2], j[3]) for j in JOKES}
@@ -143,9 +149,9 @@ def frame_end(t):
 
 ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
     "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-    "-f", "lavfi", "-t", str(total), "-i", "anullsrc=r=44100:cl=stereo",
+    *(["-i", os.environ["AUDIO"]] if os.environ.get("AUDIO") else ["-f", "lavfi", "-t", str(total), "-i", "anullsrc=r=44100:cl=stereo"]),
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "18",
-    "-c:a", "aac", "-shortest", "-movflags", "+faststart", OUT], stdin=subprocess.PIPE)
+    "-c:a", "aac", "-b:a", "192k", "-map", "0:v", "-map", "1:a", "-shortest", "-movflags", "+faststart", OUT], stdin=subprocess.PIPE)
 
 elapsed = 0.0
 for kind, j, dur in segments:
