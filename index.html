@@ -283,6 +283,12 @@
   .rr .sc small { display: block; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
   .rr .sc.live { color: var(--bad); }
   .rr .sc.live::before { content: none; }
+  .cmp { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--card2); font-size: 12px; }
+  .cmprow { display: grid; grid-template-columns: 1fr 52px 52px 52px; gap: 4px; padding: 2px 0; align-items: baseline; }
+  .cmprow b { text-align: center; font-size: 13px; }
+  .cmprow.hd span { color: var(--muted); text-align: center; font-size: 11px; }
+  .cmprow span:first-child { color: var(--muted); text-align: left; }
+  .dis { margin-top: 6px; color: var(--accent2); }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--accent); color: #062512;
     font-weight: 700; font-size: 14px; padding: 10px 16px; border-radius: 999px; z-index: 20; }
   .sharebtn { margin-top: 10px; width: 100%; }
@@ -566,7 +572,8 @@ function blend(m) {
   const n = Math.min(...(m.n || [99, 99])), imp = implied(m), share = data.blend || {};
   const small = n >= BLEND_UNTIL ? 1 : 0.5 + 0.5 * Math.max(0, n - MIN_GAMES) / (BLEND_UNTIL - MIN_GAMES);
   const w = Math.min(share.result ?? 1, small), wg = Math.min(share.goals ?? 1, small);
-  if (!Object.keys(imp).length || (w >= 1 && wg >= 1)) return m;
+  if (!Object.keys(imp).length) return m;
+  if (w >= 1 && wg >= 1) return { ...m, ftModel: m.ft, blend: 1 };
   const f = { ...m.ft }, mix = (a, b, s) => Math.round((s * a + (1 - s) * b) * 10) / 10;
   if (imp["1"]) {
     f.home = mix(f.home, imp["1"], w); f.draw = mix(f.draw, imp.X, w); f.away = mix(f.away, imp["2"], w);
@@ -575,7 +582,7 @@ function blend(m) {
     Object.assign(f, { pick, pickPct: Math.round(pp * 1000) / 10, confidence: conf });
   }
   for (const [k, key] of [["O15", "over15"], ["O25", "over25"], ["O35", "over35"], ["BTTS", "btts"]]) if (imp[k]) f[key] = mix(f[key], imp[k], wg);
-  return { ...m, ft: f, blend: w, blendSmall: small < 1 };
+  return { ...m, ft: f, ftModel: m.ft, blend: w, blendSmall: small < (share.result ?? 1) };   // few games is the reason
 }
 function mainPick(H, D, A) {   // same headline-pick rules as predict.py
   if (Math.max(H, A) >= 0.45) { const p = Math.max(H, A); return [H >= A ? "1" : "2", p, p >= 0.55 ? "High" : "Medium"]; }
@@ -689,7 +696,7 @@ function card(m) {
       <span class="conf ${f.confidence}">${f.confidence}</span></div>
     ${quickAdd(m)}
     ${valueLine(m)}
-    ${m.blend != null ? `<div class="blendnote">Chances are ${Math.round(m.blend * 100)}% our model, ${Math.round((1 - m.blend) * 100)}% the bookmaker's odds (${esc(bookName(m))})${m.blendSmall ? ` (more bookmaker because of few recent games: ${Math.min(...m.n)})` : " (the mix that was most accurate in back-testing)"}.</div>` : ""}
+    ${compareBlock(m)}
     ${newsBlock(m)}
     <div class="more">
       ${marketsTable(m)}
@@ -872,6 +879,43 @@ function tnToken() {
   rerender();
 }
 
+// Our model's chances next to the bookmaker's. The bar, picks and parlays use the blend
+// (mostly the bookmaker's chances: they were more accurate in back-testing).
+function disagreement(m) {
+  if (!m.ftModel) return null;
+  const imp = implied(m);
+  if (!imp["1"]) return null;
+  const opts = [["1", m.home.name, m.ftModel.home], ["X", "a draw", m.ftModel.draw], ["2", m.away.name, m.ftModel.away]]
+    .map(([k, name, ours]) => ({ k, name, ours, book: imp[k], diff: ours - imp[k] }));
+  return opts.reduce((a, b) => Math.abs(b.diff) > Math.abs(a.diff) ? b : a);
+}
+function compareBlock(m) {
+  if (!m.ftModel) return "";
+  const imp = implied(m), f = m.ftModel, r = x => Math.round(x);
+  const row = (label, h, d, a) => `<div class="cmprow"><span>${label}</span><b>${r(h)}%</b><b>${r(d)}%</b><b>${r(a)}%</b></div>`;
+  const dis = disagreement(m);
+  const said = dis && Math.abs(dis.diff) >= 8
+    ? `<div class="dis">Our model gives ${esc(dis.name)} ${r(dis.ours)}%, the bookmaker ${r(dis.book)}%. Back-testing found the bookmaker was usually closer when we disagreed.</div>` : "";
+  return `<div class="cmp">
+      <div class="cmprow hd"><span></span><span>Home</span><span>Draw</span><span>Away</span></div>
+      ${row("Our model", f.home, f.draw, f.away)}
+      ${imp["1"] ? row(esc(bookName(m)), imp["1"], imp.X, imp["2"]) : ""}
+      <div class="note" style="margin:4px 0 0">${m.blend === 1 ? "Picks and parlays use our model's chances" : m.blend === 0 ? "Picks and parlays use the bookmaker's chances" : `Picks and parlays use ${r(m.blend * 100)}% our model, ${r((1 - m.blend) * 100)}% the bookmaker`}${m.blendSmall ? ` (few recent games: ${Math.min(...m.n)})` : ": the most accurate mix in back-testing"}.</div>
+      ${said}</div>`;
+}
+function disagreeBox(list) {
+  const top = list.filter(m => enough(m) && new Date(m.date) > Date.now())
+    .map(m => ({ m, d: disagreement(m) })).filter(x => x.d && Math.abs(x.d.diff) >= 8)
+    .sort((a, b) => Math.abs(b.d.diff) - Math.abs(a.d.diff)).slice(0, 5);
+  if (!top.length) return "";
+  return `<div class="best" style="border-color:var(--line);background:var(--card)">
+    <h3 style="color:var(--text)">Model vs bookmaker: biggest disagreements</h3>
+    <div class="note" style="margin:0 0 4px">For interest: back-testing found the bookmaker was usually closer when we disagreed.</div>` + top.map(({ m, d }) =>
+    `<div class="bp" data-go="${m.id}"><div class="t"><div>${esc(m.home.name)} v ${esc(m.away.name)}</div>
+      <div>${esc(d.name === "a draw" ? "Draw" : d.name + " to win")}: ours ${Math.round(d.ours)}%, ${esc(bookName(m))} ${Math.round(d.book)}%</div></div>
+      <b style="color:var(--muted)">${d.diff > 0 ? "+" : ""}${Math.round(d.diff)}</b></div>`).join("") + `</div>`;
+}
+
 // Add-to-parlay buttons on the card face: home win, draw, away win.
 function quickAdd(m) {
   const b = (k, text) => {
@@ -931,7 +975,7 @@ function renderUpcoming() {
   let best = league === "ALL" ? data.best.map(id => byId[id]).filter(Boolean)
     : [...list].filter(m => enough(m) && (new Date(m.date) - Date.now()) < 7 * 86400000)
         .sort((a, b) => b.ft.pickPct - a.ft.pickPct).slice(0, 6);
-  let html = valueBox(list);
+  let html = valueBox(list) + disagreeBox(list);
   const mine = league === "ALL" ? list.filter(m => enough(m) && (isFav(m.home.name) || isFav(m.away.name))).slice(0, 5) : [];
   if (mine.length) {
     html += `<div class="best" style="margin-bottom:8px"><h3>★ Your teams</h3>` + mine.map(m =>
