@@ -62,7 +62,13 @@ def football_data(token, now, known):
 def espn(games, now):
     """International games: scores from ESPN's scoreboard (one request per competition and day)."""
     out = {}
-    for slug, day in {(m["espnSlug"], parse(m["date"]).strftime("%Y%m%d")) for m in games}:
+    # ESPN files games under the US (Eastern) date, so an evening game in the Americas can sit
+    # under the previous UTC day: ask for both.
+    days = set()
+    for m in games:
+        k = parse(m["date"])
+        days |= {(m["espnSlug"], k.strftime("%Y%m%d")), (m["espnSlug"], (k - timedelta(hours=6)).strftime("%Y%m%d"))}
+    for slug, day in days:
         req = urllib.request.Request(f"{ESPN}/{slug}/scoreboard?dates={day}", headers={"User-Agent": "Mozilla/5.0"})
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
