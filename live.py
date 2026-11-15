@@ -86,7 +86,8 @@ def espn(games, now):
             side = {x.get("homeAway"): x for x in e["competitions"][0]["competitors"]}
             score = lambda x: int(x["score"]) if str(x.get("score", "")).isdigit() else 0
             clock = "".join(ch for ch in str(e["status"].get("displayClock", "")) if ch.isdigit())
-            status = "FINISHED" if st.get("completed") else "PAUSED" if "HALF" in str(st.get("name")) else "IN_PLAY"
+            # only half-time itself is a pause ("STATUS_SECOND_HALF" also contains "HALF")
+            status = "FINISHED" if st.get("completed") else "PAUSED" if "HALFTIME" in str(st.get("name")).upper() else "IN_PLAY"
             out[key] = {"kickoff": e["date"], "status": status, "score": [score(side["home"]), score(side["away"])],
                         "ht": [None, None], "minute": int(clock) if clock and status == "IN_PLAY" else None}
     return out
