@@ -39,18 +39,21 @@ jobs:
           end=$(( $(date +%s) + 340 * 60 ))
           while [ "$(date +%s)" -lt "$end" ]; do
             started=$(date +%s)
-            git pull --rebase -q origin main || true      # new predictions and results
-            python3 team_news.py || echo "team_news.py failed"
-            python3 live.py || echo "live.py failed"
-            python3 tracker.py || echo "tracker.py failed"
-            python3 alerts.py || echo "alerts.py failed"
+            # new predictions and results: this job never commits to main, so just jump to it
+            # (a pull/rebase here could get stuck on a conflict and freeze every later round)
+            timeout 60 git fetch -q origin main && git reset -q --hard origin/main || echo "fetch failed"
+            # time limits, so one hung download can't stop the loop
+            timeout 240 python3 team_news.py || echo "team_news.py failed or timed out"
+            timeout 120 python3 live.py || echo "live.py failed or timed out"
+            timeout 60 python3 tracker.py || echo "tracker.py failed or timed out"
+            timeout 60 python3 alerts.py || echo "alerts.py failed or timed out"
             (
               cd live && git add -A data
               if ! git diff --cached --quiet; then
                 # one commit, replaced each time, so the branch stays small
                 if git rev-parse -q --verify HEAD >/dev/null; then git commit -q --amend -m "Live data"
                 else git commit -q -m "Live data"; fi
-                git push -q -f origin live-data || echo "push failed"
+                timeout 60 git push -q -f origin live-data || echo "push failed"
               fi
             )
             wait=$(( 300 - ($(date +%s) - started) ))

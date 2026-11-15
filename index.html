@@ -273,6 +273,16 @@
   .ck .w small { display: block; color: var(--muted); font-size: 12px; }
   .ck.done .w { opacity: .45; text-decoration: line-through; }
   .ck .cp { flex: none; }
+  .rr { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .rr:first-child { border-top: 0; }
+  .rr .t { flex: 1; min-width: 0; }
+  .rr .t .tm { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; }
+  .rr .t .tm span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rr .t .pr { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .rr .sc { font-size: 20px; font-weight: 800; min-width: 54px; text-align: center; white-space: nowrap; }
+  .rr .sc small { display: block; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+  .rr .sc.live { color: var(--bad); }
+  .rr .sc.live::before { content: none; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--accent); color: #062512;
     font-weight: 700; font-size: 14px; padding: 10px 16px; border-radius: 999px; z-index: 20; }
   .sharebtn { margin-top: 10px; width: 100%; }
@@ -292,9 +302,10 @@
 <main>
   <div class="tabs">
     <button data-tab="up" class="on">Predictions</button>
+    <button data-tab="results">Results</button>
     <button data-tab="parlay">Parlay</button>
     <button data-tab="tables">Tables</button>
-    <button data-tab="res">Track record</button>
+    <button data-tab="res">Record</button>
   </div>
   <div class="chips" id="chips"></div>
   <div id="view"></div>
@@ -380,7 +391,8 @@ const pctv = v => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
 const edgeTag = (v, text) => v > CHECK_EDGE ? `<span class="vb chk">CHECK THIS</span>`
   : v >= VALUE_MIN ? `<span class="vb">${text || "VALUE"}</span>` : "";
 const scoreOf = m => (liveScores.matches || {})[m.id];
-const isLive = s => s && (s.status === "IN_PLAY" || s.status === "PAUSED");
+// "Live" only up to 3 hours after kick-off, so a stale score never shows as still playing
+const isLive = s => s && (s.status === "IN_PLAY" || s.status === "PAUSED") && (!s.kickoff || Date.now() - new Date(s.kickoff) < 3 * 3600000);
 const isDone = s => s && (s.status === "FINISHED" || s.status === "AWARDED");
 function legStatus(l) {
   const s = scoreOf(l.m);
@@ -1302,10 +1314,55 @@ function renderResults() {
   return html;
 }
 
+// ---------------------------------------------------------------- results tab
+// Games from the last 7 days that we made a prediction for: the actual score (or the live
+// score while it's on) next to our pick, with right/wrong marks.
+function renderRecentResults() {
+  const since = Date.now() - 7 * 86400000, nowT = Date.now();
+  const games = Object.entries(history.matches || {})
+    .map(([id, r]) => ({ id, r, live: (liveScores.matches || {})[id] }))
+    .filter(({ r }) => inLeague(r.league) && new Date(r.date) <= nowT && new Date(r.date) >= since)
+    .sort((a, b) => b.r.date.localeCompare(a.r.date));
+  if (!games.length) return `<div class="empty">No games in the last 7 days yet. Results appear here as soon as games kick off.</div>`;
+  const mark = (ok, label) => ok === undefined ? "" : `<span class="mark ${ok ? "ok" : "no"}">${ok ? "✓" : "✗"} ${label}</span>`;
+  const playing = games.filter(g => isLive(g.live));
+  const done = games.filter(g => !isLive(g.live));
+  const row = ({ r, live }) => {
+    const ft = r.result ? r.result.ft : isDone(live) ? live.score : null;
+    const pickTxt = esc(pickText(r.pick, r.home, r.away));
+    let score;
+    if (isLive(live)) score = `<div class="sc live">${live.score[0]}-${live.score[1]}<small>${live.status === "PAUSED" ? "HT" : live.minute ? live.minute + "'" : "LIVE"}</small></div>`;
+    else if (ft) score = `<div class="sc">${ft[0]}-${ft[1]}<small>FT</small></div>`;
+    else score = `<div class="sc" style="font-size:13px;color:var(--muted)">–<small>awaiting</small></div>`;
+    let marks = "";
+    if (ft && !isLive(live)) {
+      const x = grade({ ...r, result: { ...(r.result || {}), ft, ht: (r.result || {}).ht || [null, null], corners: (r.result || {}).corners ?? null } });
+      marks = `<div class="marks">${mark(x.main, "Pick")}${mark(x.over25, "O/U 2.5")}${mark(x.btts, "BTTS")}${x.exact ? mark(true, "Exact score") : ""}</div>`;
+    }
+    return `<div class="rr"><div class="t">
+        <div class="tm"><span>${esc(r.home)} v ${esc(r.away)}</span></div>
+        <div class="pr">${r.league === "INT" ? "🌍 International" : esc(LEAGUES[r.league] || r.league)} · ${esc(new Date(r.date).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))} · we said ${pickTxt} (${r.score[0]}-${r.score[1]})</div>
+        ${marks}</div>${score}</div>`;
+  };
+  let html = "";
+  if (playing.length) html += `<div class="day" style="color:var(--bad)">● Playing now</div><div class="card">${playing.map(row).join("")}</div>`;
+  let last = "", buf = [];
+  const flush = () => { if (buf.length) html += `<div class="day">${esc(last)}</div><div class="card">${buf.join("")}</div>`; buf = []; };
+  for (const g of done) {
+    const day = new Date(g.r.date).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
+    if (day !== last) { flush(); last = day; }
+    buf.push(row(g));
+  }
+  flush();
+  const graded = done.filter(g => g.r.result || isDone(g.live));
+  const right = graded.filter(g => grade({ ...g.r, result: { ft: g.r.result ? g.r.result.ft : g.live.score, ht: [null, null], corners: null } }).main).length;
+  return `<div class="note">Last 7 days: our pick was right in <b>${right} of ${graded.length}</b> finished games. Scores update every few minutes while games are on.</div>` + html;
+}
+
 function render() {
   renderChips();
   document.getElementById("view").innerHTML =
-    tab === "up" ? renderUpcoming() : tab === "parlay" ? renderParlay()
+    tab === "up" ? renderUpcoming() : tab === "results" ? renderRecentResults() : tab === "parlay" ? renderParlay()
       : tab === "tables" ? renderTables() : renderResults();
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   document.querySelector('[data-tab="parlay"]').textContent = slip.length ? `Parlay (${slip.length})` : "Parlay";
