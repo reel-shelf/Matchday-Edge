@@ -289,6 +289,7 @@
   .cmprow.hd span { color: var(--muted); text-align: center; font-size: 11px; }
   .cmprow span:first-child { color: var(--muted); text-align: left; }
   .dis { margin-top: 6px; color: var(--accent2); }
+  .askbtn { width: 100%; margin-top: 8px; padding: 8px; font-size: 13px; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--accent); color: #062512;
     font-weight: 700; font-size: 14px; padding: 10px 16px; border-radius: 999px; z-index: 20; }
   .sharebtn { margin-top: 10px; width: 100%; }
@@ -721,6 +722,7 @@ function card(m) {
       ${h2h}
       ${teamNewsPanel(m)}
       <div class="favs">${[H, A].map(t => `<button data-fav="${esc(t)}" class="${isFav(t) ? "on" : ""}">${isFav(t) ? "★ Following" : "☆ Follow"} ${esc(t)}</button>`).join("")}</div>
+      <button class="btn ghost askbtn" data-ask-match="${m.id}">✨ Ask Claude about this game</button>
     </div>
     <div class="hint">Tap for more picks to add (goals, double chance…), odds, halves, corners & head to head</div>
   </div>`;
@@ -789,7 +791,8 @@ function bookingRow(key, legs) {
   const stale = e && e.sig !== sig ? `<div class="note" style="margin:8px 0 0">The picks changed since the JustBet code was made, so it's hidden.</div>` : "";
   return code + stale + `<div class="pbtns">
     <button class="btn ghost" data-checklist="${key}">📋 Bet slip checklist</button>
-    <button class="btn ghost" data-code-set="${key}">${code ? "Change code" : "+ JustBet code"}${token ? "" : ""}</button></div>`;
+    <button class="btn ghost" data-code-set="${key}">${code ? "Change code" : "+ JustBet code"}</button></div>
+    <button class="btn ghost askbtn" data-ask-parlay="${key}">✨ Ask Claude about this parlay</button>`;
 }
 async function setCode(key) {
   const legs = parlayLegs[key];
@@ -1141,6 +1144,7 @@ function slipCard() {
     ${oddsSummary(legs, 1 / chance)}
     <div class="btnrow"><button class="btn ghost" data-clear="1">Clear</button>${shareBtn("mine", "My parlay", legs, 1 / chance).replace("sharebtn", "").replace(" this parlay", "")}</div>
     <div class="pbtns">${checklistBtn("mine", "My parlay", legs)}</div>
+    <button class="btn ghost askbtn" data-ask-parlay="mine">✨ Ask Claude about my parlay</button>
   </div>`;
 }
 
@@ -1442,6 +1446,10 @@ document.getElementById("view").onclick = e => {
     else if (t) tnToken();
     return;                      // typing in the panel shouldn't close the card
   }
+  const am = e.target.closest("[data-ask-match]");
+  if (am) { const m = data.matches.find(x => x.id === +am.dataset.askMatch); if (m) askClaude(matchPrompt(m)); return; }
+  const ap = e.target.closest("[data-ask-parlay]");
+  if (ap) { askClaude(parlayPrompt(ap.dataset.askParlay)); return; }
   const cpy = e.target.closest("[data-copy]");
   if (cpy) { copyText(cpy.dataset.copy, cpy.dataset.copyMsg); return; }
   const cl = e.target.closest("[data-checklist]");
@@ -1527,6 +1535,60 @@ document.addEventListener("visibilitychange", () => refreshLive());
 
 document.getElementById("shareApp").onclick = () => share(
   "Matchday Edge: free football predictions, parlays and value bets. Open the link, then Install app (or Share → Add to Home Screen on iPhone).", APP_URL);
+
+// ---------------------------------------------------------------- Ask Claude
+// Opens Claude with the game's or parlay's details already written in (and copies them too,
+// in case the pre-fill doesn't come through). Free: it uses the person's own Claude account.
+const pc0 = x => `${Math.round(x)}%`;
+function scorecardLine() {
+  const v = evaluation && evaluation.vsBook;
+  return v ? `In back-testing on ${v.games} games this season, the bookmaker's odds were ${v.bookBrier < v.modelBrier ? "slightly more" : "no less"} accurate than the app's model (Brier score ${v.bookBrier} vs ${v.modelBrier}; lower is better), so the app's picks use the bookmaker's chances where odds exist.` : "";
+}
+function matchPrompt(m) {
+  const f = m.ftModel || m.ft, imp = implied(m), o = oddsFor(m), n = m.news;
+  const when = new Date(m.date).toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+  const lines = [
+    "I'm using Matchday Edge, a football prediction app. Help me think through this game. Be honest about uncertainty, and treat it as entertainment, not betting advice.",
+    "",
+    `Match: ${m.home.name} v ${m.away.name} (${m.compName || LEAGUES[m.league] || m.league}), ${when}`,
+    `App's model: ${m.home.name} ${pc0(f.home)}, draw ${pc0(f.draw)}, ${m.away.name} ${pc0(f.away)}. Most likely score ${f.score[0]}-${f.score[1]} (expected goals ${f.xg[0].toFixed(1)}-${f.xg[1].toFixed(1)}). Over 1.5 goals ${pc0(f.over15)}, over 2.5 ${pc0(f.over25)}, both teams score ${pc0(f.btts)}.`,
+  ];
+  if (imp["1"]) lines.push(`Bookmaker (${bookName(m)}): ${m.home.name} ${o["1"]}, draw ${o.X}, ${m.away.name} ${o["2"]} (implied ${pc0(imp["1"])} / ${pc0(imp.X)} / ${pc0(imp["2"])}).`);
+  if (m.ft !== f) lines.push(`Chances the app uses for picks: ${pc0(m.ft.home)} / ${pc0(m.ft.draw)} / ${pc0(m.ft.away)}.`);
+  lines.push(`Recent form (newest first): ${m.home.name} ${(m.home.form || []).join("") || "n/a"}, ${m.away.name} ${(m.away.form || []).join("") || "n/a"}.`);
+  if ((m.h2h || []).length) lines.push("Recent meetings: " + m.h2h.map(g => `${g.date.slice(0, 7)} ${g.home} ${g.score[0]}-${g.score[1]} ${g.away}`).join("; ") + ".");
+  if (n) {
+    const side = (s, name) => (s.out || []).length || (s.benched || []).length
+      ? `${name}: ` + [...(s.out || []).map(p => `${p.name} (${p.status === "doubt" ? "doubtful" : p.reason || "out"}${p.key ? ", key player" : ""})`), ...(s.benched || []).map(p => `${p.name} (not starting)`)].join(", ")
+      : `${name}: no absences reported`;
+    lines.push(`Team news: ${side(n.home, m.home.name)}. ${side(n.away, m.away.name)}.`);
+  }
+  const sc = scorecardLine(); if (sc) lines.push(sc);
+  lines.push("", "My question: ");
+  return lines.join("\n");
+}
+function parlayPrompt(key) {
+  const legs = [...(parlayLegs[key] || [])].sort((a, b) => a.m.date.localeCompare(b.m.date)), title = checklistTitles[key] || "Parlay";
+  const chance = legs.reduce((x, l) => x * l.p / 100, 1), bk = bookTotal(legs);
+  const lines = [
+    `I'm using Matchday Edge, a football prediction app. Help me think through this ${legs.length}-pick parlay ("${title}"). Be honest about the risks, and treat it as entertainment, not betting advice.`,
+    "",
+    ...legs.map((l, i) => {
+      const b = l.k ? bookOf(l.m, l.k) : null;
+      return `${i + 1}. ${l.label}: ${l.m.home.name} v ${l.m.away.name}, ${new Date(l.m.date).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}. Chance ${pc0(l.p)}${b ? `, ${bookName(l.m)} odds ${b}` : ""}.`;
+    }),
+    "",
+    `Chance all picks win (picks treated as independent): ${(chance * 100).toFixed(chance < 0.1 ? 1 : 0)}%. Fair odds ${fmtOdds(1 / chance)}${bk ? `, bookmaker odds combined ${fmtOdds(bk)}` : ""}.`,
+  ];
+  const sc = scorecardLine(); if (sc) lines.push(sc);
+  lines.push("", "My question: ");
+  return lines.join("\n");
+}
+async function askClaude(text) {
+  try { await navigator.clipboard.writeText(text); } catch (e) {}
+  toast("Opening Claude: if the details aren't filled in, paste them (they're copied)");
+  window.open("https://claude.ai/new?q=" + encodeURIComponent(text), "_blank", "noopener");
+}
 
 async function copyText(text, msg) {
   try { await navigator.clipboard.writeText(text); toast(msg || "Copied"); } catch (e) { prompt("Copy this:", text); }
