@@ -1,18 +1,18 @@
 {
  "games": 958,
  "result": {
-  "model": 52.6,
+  "model": 52.7,
   "alwaysHome": 44.1
  },
  "brier": {
-  "model": 0.5832,
+  "model": 0.5835,
   "average": 0.6438
  },
  "vsBook": {
   "games": 886,
-  "modelRight": 51.5,
+  "modelRight": 51.6,
   "bookRight": 53.7,
-  "modelBrier": 0.5885,
+  "modelBrier": 0.5888,
   "bookBrier": 0.5774
  },
  "goals": {
@@ -47,16 +47,16 @@
    "roi": -3.6
   },
   "result": {
-   "bets": 193,
-   "won": 79,
-   "profit": -3.16,
-   "roi": -1.6
+   "bets": 210,
+   "won": 90,
+   "profit": -3.0,
+   "roi": -1.4
   },
   "all": {
-   "bets": 560,
-   "won": 284,
-   "profit": 1.34,
-   "roi": 0.2
+   "bets": 577,
+   "won": 295,
+   "profit": 1.5,
+   "roi": 0.3
   },
   "O25": {
    "bets": 367,
@@ -72,9 +72,9 @@
    "goals": 0.05
   },
   "right": 54.7,
-  "brier": 0.5757,
+  "brier": 0.5759,
   "bookBrier": 0.5751,
-  "modelBrier": 0.5868,
+  "modelBrier": 0.5871,
   "over25": {
    "blend": 0.2351,
    "book": 0.2349,
@@ -87,6 +87,18 @@
    "won": 420,
    "profit": -19.76,
    "roi": -2.5
+  },
+  "result": {
+   "bets": 1,
+   "won": 0,
+   "profit": -1.0,
+   "roi": -100.0
+  },
+  "all": {
+   "bets": 1,
+   "won": 0,
+   "profit": -1.0,
+   "roi": -100.0
   }
  }
 }
