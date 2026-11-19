@@ -32,6 +32,13 @@
    "raw": 0.2429
   }
  },
+ "half": {
+  "n": 1916,
+  "rate": 30.0,
+  "raw": 0.1983,
+  "calibrated": 0.1988,
+  "average": 0.2098
+ },
  "betting": {
   "favourite": {
    "bets": 886,
