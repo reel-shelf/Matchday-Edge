@@ -1,6 +1,6 @@
 // Matchday Edge service worker: lets the app install and open without internet.
 // Change VERSION whenever index.html changes, so phones pick up the new page.
-const VERSION = "me-v22";
+const VERSION = "me-v23";
 const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {

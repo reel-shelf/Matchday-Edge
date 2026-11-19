@@ -347,6 +347,7 @@ const LIVE_URL = "https://raw.githubusercontent.com/reel-shelf/Matchday-Edge/liv
 const NTFY_TOPIC = "matchday-edge-tugoa54ey5";
 const VALUE_MIN = 0.05;   // a bookmaker price 5%+ above fair odds counts as value
 let evaluation = null;
+let clubOdds = { matches: {} };   // Bet365 / DraftKings for club games (club_odds.py, every 30 min)
 let odds = { matches: {} }, liveScores = { matches: {} }, parlayHist = { days: {} }, newsEval = { matches: {} };
 const loadLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
 const saveLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
@@ -388,8 +389,8 @@ function legWins(k, [h, a], ht) {
   return { "1": h > a, "2": a > h, X: h === a, "1X": h >= a, X2: a >= h, "12": h !== a,
     O15: h + a >= 2, O25: h + a >= 3, O35: h + a >= 4, BTTS: h > 0 && a > 0 }[k];
 }
-// Bookmaker odds: Bet365 for club games (odds.json), DraftKings via ESPN for internationals (in the match).
-const oddsFor = m => (odds.matches || {})[m.id] || m.odds;
+// Bookmaker odds: club games from club-odds.json (Bet365, or DraftKings via ESPN), internationals in the match (DraftKings).
+const oddsFor = m => (odds.matches || {})[m.id] || (clubOdds.matches || {})[m.id] || m.odds;
 const bookOf = (m, k) => { const o = oddsFor(m), v = o && o[k]; return v > 1 ? v : null; };
 const bookName = m => (oddsFor(m) || {}).book || "Bookmaker";
 const valueOf = (p, o) => o ? o * p / 100 - 1 : null;
@@ -548,6 +549,17 @@ function recalibrate(f, old) {
     const [a, b] = cal[mk] || [0, 1], p = Math.min(Math.max(f[key] / 100, 1e-4), 1 - 1e-4);
     raw[key] = f[key];
     f[key] = Math.round(1000 / (1 + Math.exp(-(a + b * Math.log(p / (1 - p)))))) / 10;
+  }
+  Object.assign(raw, { home: f.home, draw: f.draw, away: f.away });
+  const [ra, rb] = cal.R || [0, 1];
+  if (ra !== 0 || rb !== 1) {   // full-time result, same correction as predict.calibrate_result
+    const adj = x => { const q = Math.min(Math.max(x / 100, 1e-4), 1 - 1e-4); return 100 / (1 + Math.exp(-(ra + rb * Math.log(q / (1 - q))))); };
+    let hh = adj(f.home), aa = adj(f.away);
+    if (hh + aa > 97) { const k = 97 / (hh + aa); hh *= k; aa *= k; }
+    const dd = 100 - hh - aa, r1 = x => Math.round(x * 10) / 10;
+    Object.assign(f, { home: r1(hh), draw: r1(dd), away: r1(aa), dc: { "1X": r1(hh + dd), X2: r1(dd + aa), "12": r1(hh + aa) } });
+    const [pick, pp, conf] = mainPick(hh / 100, dd / 100, aa / 100);
+    Object.assign(f, { pick, pickPct: Math.round(pp * 1000) / 10, confidence: conf });
   }
   return { ...f, raw };
 }
@@ -1521,8 +1533,8 @@ async function getLiveFile(name) {
 }
 async function refreshLive(first) {
   if (!first && document.hidden) return;
-  const [n, o, l, ph, ev] = await Promise.all(
-    ["team-news.json", "odds.json", "live.json", "parlay-history.json", "news-eval.json"].map(getLiveFile));
+  const [n, o, l, ph, ev, co] = await Promise.all(
+    ["team-news.json", "odds.json", "live.json", "parlay-history.json", "news-eval.json", "club-odds.json"].map(getLiveFile));
   const bc = await fetch(CODES_RAW + "?t=" + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null)
     || await fetch("data/booking-codes.json?t=" + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
   const mn = await fetch(MANUAL_RAW + "?t=" + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null)
@@ -1533,7 +1545,7 @@ async function refreshLive(first) {
     changed = true; return nw;
   };
   news = upd(news, n, "matches"); odds = upd(odds, o, "matches"); liveScores = upd(liveScores, l, "matches");
-  parlayHist = upd(parlayHist, ph, "days"); newsEval = upd(newsEval, ev, "matches"); manual = upd(manual, mn, "matches"); codes = upd(codes, bc, "codes");
+  parlayHist = upd(parlayHist, ph, "days"); newsEval = upd(newsEval, ev, "matches"); manual = upd(manual, mn, "matches"); clubOdds = upd(clubOdds, co, "matches"); codes = upd(codes, bc, "codes");
   if (n && n.updated) news.updated = n.updated;
   if (changed && !first) { applyNews(); rerender(); }
 }

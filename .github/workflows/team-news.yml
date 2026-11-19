@@ -45,6 +45,7 @@ jobs:
             # time limits, so one hung download can't stop the loop
             timeout 240 python3 team_news.py || echo "team_news.py failed or timed out"
             timeout 120 python3 live.py || echo "live.py failed or timed out"
+            timeout 120 python3 club_odds.py || echo "club_odds.py failed or timed out"
             timeout 60 python3 tracker.py || echo "tracker.py failed or timed out"
             timeout 60 python3 alerts.py || echo "alerts.py failed or timed out"
             (

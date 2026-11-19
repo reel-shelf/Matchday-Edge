@@ -348,13 +348,41 @@ def fit_calibration(rows):
         if raw and ht[0] is not None and ht[1] is not None:
             pairs += [(raw[0] / 100, 1 if ht[0] > ht[1] else 0), (raw[2] / 100, 1 if ht[1] > ht[0] else 0)]
     out["H1"] = fit_platt(pairs)
+    # Full-time result: chance of a home win and of an away win (one shared correction; the
+    # draw is what's left). Back-testing showed strong favourites won more often than we said.
+    pairs = []
+    for r in rows:
+        raw = r.get("probsRaw")
+        if raw and r.get("result"):
+            h, a = r["result"]["ft"]
+            pairs += [(raw[0] / 100, 1 if h > a else 0), (raw[2] / 100, 1 if a > h else 0)]
+    out["R"] = fit_platt(pairs)
     return out
+
+
+def calibrate_result(f, calib):
+    """Calibrated home/draw/away (+ double chance and headline pick) from f's current chances."""
+    a, b = calib.get("R", (0.0, 1.0))
+    if (a, b) == (0.0, 1.0):
+        return f
+    adj = lambda x: 100 / (1 + math.exp(-(a + b * logit(x / 100))))
+    hh, aa = adj(f["home"]), adj(f["away"])
+    if hh + aa > 97:
+        k = 97 / (hh + aa); hh, aa = hh * k, aa * k
+    dd = 100 - hh - aa
+    f["home"], f["draw"], f["away"] = round(hh, 1), round(dd, 1), round(aa, 1)
+    f["dc"] = {"1X": round(hh + dd, 1), "X2": round(dd + aa, 1), "12": round(hh + aa, 1)}
+    pick, pp, conf = main_pick(hh / 100, dd / 100, aa / 100)
+    f["pick"], f["pickPct"], f["confidence"] = pick, pct(pp), conf
+    return f
 
 
 def calibrate(p, calib):
     """Apply the corrections to a prediction's full-time goals chances (keeps the raw ones)."""
     f = p["ft"]
     f["raw"] = {key: f[key] for key, _ in CALIB_MARKETS.values()}
+    f["raw"].update(home=f["home"], draw=f["draw"], away=f["away"])
+    calibrate_result(f, calib)
     for mk, (key, _) in CALIB_MARKETS.items():
         a, b = calib.get(mk, (0.0, 1.0))
         q = 1 / (1 + math.exp(-(a + b * logit(f[key] / 100))))
@@ -610,6 +638,7 @@ def record(code, date, home, away, p):
         "league": code, "date": date, "home": home, "away": away,
         "pick": f["pick"], "confidence": f["confidence"],
         "probs": [f["home"], f["draw"], f["away"]],
+        "probsRaw": [f["raw"]["home"], f["raw"]["draw"], f["raw"]["away"]] if f.get("raw") else None,
         "dcPick": "1X" if f["home"] >= f["away"] else "X2",
         "score": f["score"], "over15": f["over15"], "over25": f["over25"], "over35": f["over35"],
         "btts": f["btts"], "raw": f.get("raw"),
@@ -790,6 +819,10 @@ def main():
     out["blend"] = fit_blend(backtest)
     print("Blend with the bookmaker (our share):", out["blend"])
     upcoming_odds = load_fixture_odds(fixtures, name_to_id)
+    # spreadsheet team names -> team ids, so club_odds.py can match the fixtures file between runs
+    out["csvNames"] = {}
+    for (code, name), tid in name_to_id.items():
+        out["csvNames"].setdefault(code, {})[name] = tid
     print(f"  Bet365 odds for {len(upcoming_odds)} upcoming games")
     print("Goals calibration:", out["calib"])
     for code, m in fixtures:
@@ -809,6 +842,7 @@ def main():
                      "home": teams_info[g["home"]]["name"], "away": teams_info[g["away"]]["name"],
                      "score": list(g["ft"])} for g in h2h],
             **({"odds": upcoming_odds[m["id"]]} if m["id"] in upcoming_odds else {}),
+            "homeId": hid, "awayId": aid,
             "n": [counts[hid], counts[aid]],
             "enough": min(counts[hid], counts[aid]) >= MIN_GAMES,
         })

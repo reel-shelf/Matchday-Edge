@@ -122,7 +122,8 @@ def main():
     history = load_json(os.path.join(OUT_DIR, "history.json"), {"matches": {}})
     news = pl.merge_news(load_json(os.path.join(LIVE_DIR, "team-news.json"), {}).get("matches", {}),
                          load_json(os.path.join(OUT_DIR, "manual-news.json"), {}).get("matches", {}))
-    odds = load_json(os.path.join(LIVE_DIR, "odds.json"), {}).get("matches", {})
+    odds = {**load_json(os.path.join(LIVE_DIR, "club-odds.json"), {}).get("matches", {}),
+            **load_json(os.path.join(LIVE_DIR, "odds.json"), {}).get("matches", {})}
     live = load_json(os.path.join(LIVE_DIR, "live.json"), {"matches": {}})
     res = results(history, live)
     os.makedirs(LIVE_DIR, exist_ok=True)

@@ -67,6 +67,16 @@ def recalibrate(out, old):
         p = min(max(out[key] / 100, 1e-4), 1 - 1e-4)
         raw[key] = out[key]
         out[key] = round(100 / (1 + math.exp(-(a + b * math.log(p / (1 - p))))), 1)
+    raw.update(home=out["home"], draw=out["draw"], away=out["away"])
+    a, b = CALIB.get("R", (0, 1))
+    if (a, b) != (0, 1):     # full-time result, same correction as predict.calibrate_result
+        adj = lambda x: 100 / (1 + math.exp(-(a + b * math.log(min(max(x / 100, 1e-4), 1 - 1e-4) / (1 - min(max(x / 100, 1e-4), 1 - 1e-4))))))
+        hh, aa = adj(out["home"]), adj(out["away"])
+        if hh + aa > 97:
+            k = 97 / (hh + aa); hh, aa = hh * k, aa * k
+        dd = 100 - hh - aa
+        out["home"], out["draw"], out["away"] = round(hh, 1), round(dd, 1), round(aa, 1)
+        out["dc"] = {"1X": round(hh + dd, 1), "X2": round(dd + aa, 1), "12": round(hh + aa, 1)}
     out["raw"] = raw
     return out
 
