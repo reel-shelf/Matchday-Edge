@@ -340,6 +340,14 @@ def fit_calibration(rows):
         pairs = [(r["raw"][key] / 100, 1 if happened(r["result"]["ft"]) else 0)
                  for r in rows if r.get("result") and r.get("raw", {}).get(key) is not None]
         out[mk] = fit_platt(pairs)
+    # 1st half: chance a team is winning at half-time (home and away share one correction)
+    pairs = []
+    for r in rows:
+        ht = (r.get("result") or {}).get("ht") or [None, None]
+        raw = r.get("h1raw")
+        if raw and ht[0] is not None and ht[1] is not None:
+            pairs += [(raw[0] / 100, 1 if ht[0] > ht[1] else 0), (raw[2] / 100, 1 if ht[1] > ht[0] else 0)]
+    out["H1"] = fit_platt(pairs)
     return out
 
 
@@ -351,6 +359,15 @@ def calibrate(p, calib):
         a, b = calib.get(mk, (0.0, 1.0))
         q = 1 / (1 + math.exp(-(a + b * logit(f[key] / 100))))
         f[key] = round(100 * q, 1)
+    h = p.get("h1")
+    if h:   # 1st-half chances: same kind of correction, checked against real half-time scores
+        h["raw"] = [h["home"], h["draw"], h["away"]]
+        a, b = calib.get("H1", (0.0, 1.0))
+        adj = lambda x: 100 / (1 + math.exp(-(a + b * logit(x / 100))))
+        hh, aa = adj(h["home"]), adj(h["away"])
+        if hh + aa > 97:
+            k = 97 / (hh + aa); hh, aa = hh * k, aa * k
+        h["home"], h["away"], h["draw"] = round(hh, 1), round(aa, 1), round(100 - hh - aa, 1)
     return p
 
 
@@ -597,6 +614,7 @@ def record(code, date, home, away, p):
         "score": f["score"], "over15": f["over15"], "over25": f["over25"], "over35": f["over35"],
         "btts": f["btts"], "raw": f.get("raw"),
         "h1pick": p["h1"]["pick"], "h2pick": p["h2"]["pick"],
+        "h1raw": p["h1"].get("raw"), "h1probs": [p["h1"]["home"], p["h1"]["draw"], p["h1"]["away"]],
         "cornersOver95": p["corners"]["over"]["9.5"] if p.get("corners") else None,
         "result": None,
     }

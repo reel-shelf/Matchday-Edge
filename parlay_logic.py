@@ -14,6 +14,7 @@ MAX_LEGS = 30
 MIN_GAMES = 8          # both teams need this many recent games (predict.py sets m["enough"])
 BLEND_UNTIL = 15       # below this many games, our chance is blended with the bookmaker's
 CHECK_EDGE = 0.30      # an edge bigger than this is flagged "check this"
+MIN_LEG = 55           # every parlay pick needs at least this chance (%)
 
 
 def enough(m):
@@ -259,6 +260,8 @@ def build_tiers(games):
                 if m["id"] in used:
                     continue
                 for l in candidates(m):
+                    if l["p"] < MIN_LEG:
+                        continue        # no long shots, even to land on the target
                     o = odds * 100 / l["p"]
                     if target <= o <= target * 1.25 and (finish is None or o < finish[1]):
                         finish = (l, o)
@@ -293,7 +296,7 @@ def build_risk(games):
             legs.append(nxt)
         return legs
     return {"safe": grow(68, 98, 0.50, 2, 4), "bold": grow(55, 90, 0.20, 3, 8),
-            "long": grow(45, 85, 0.04, 5, 14)}
+            "long": grow(MIN_LEG, 85, 0.04, 5, 16)}
 
 
 def leg_result(market, ft, ht=None):

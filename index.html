@@ -449,8 +449,14 @@ function bookTotal(legs) {
 const books = legs => [...new Set(legs.map(l => bookName(l.m)))].join(" / ");
 function oddsSummary(legs, fair) {
   const bk = bookTotal(legs);
-  if (!bk) return `<div class="odds"><span>Fair odds</span><b>${fmtOdds(fair)}</b></div>
-    <div class="note" style="margin:6px 0 0">Only worth betting if a bookmaker pays more than ${fmtOdds(fair)}.${legs.some(l => l.k && bookOf(l.m, l.k)) ? " The bookmaker doesn't price every pick here yet." : ""}</div>`;
+  // No bookmaker total: give a rough idea of what a bookmaker pays. On a real 15-pick JustBet slip,
+  // well-priced picks paid about 4% less than fair each, and that compounds over many picks.
+  if (!bk) {
+    const est = Math.max(1, fair * Math.pow(0.96, legs.length));
+    return `<div class="odds"><span>Fair odds</span><b>${fmtOdds(fair)}</b></div>
+    <div class="odds" style="border-top:0;margin-top:0;padding-top:2px"><span>Bookmaker usually pays about</span><b>${fmtOdds(est)}</b></div>
+    <div class="note" style="margin:6px 0 0">Bookmakers pay a little less than fair on every pick (about 4% each at JustBet), and it adds up over ${legs.length} picks. Where they rate a pick more likely than we do, they pay even less.</div>`;
+  }
   const v = bk / fair - 1;
   return `<div class="odds"><span>Fair odds</span><b>${fmtOdds(fair)}</b></div>
     <div class="odds" style="border-top:0;margin-top:0;padding-top:2px"><span>${books(legs)} pays</span><b>${fmtOdds(bk)}</b></div>
@@ -1052,7 +1058,7 @@ function buildRisk(games) {
     }
     return legs;
   };
-  return { safe: grow(68, 98, 0.50, 2, 4), bold: grow(55, 90, 0.20, 3, 8), long: grow(45, 85, 0.04, 5, 14) };
+  return { safe: grow(68, 98, 0.50, 2, 4), bold: grow(55, 90, 0.20, 3, 8), long: grow(55, 85, 0.04, 5, 16) };
 }
 function riskCard(kind, title, note, legs) {
   if (!legs.length) return "";
@@ -1087,6 +1093,7 @@ function buildTiers(games) {
       for (const m of games) {
         if (used.has(m.id)) continue;
         for (const l of legOptions(m)) {
+          if (l.p < 55) continue;      // no long shots, even to land on the target
           const o = odds * 100 / l.p;
           if (o >= target && o <= target * 1.25 && (!finish || o < finish.o)) finish = { l, o };
         }

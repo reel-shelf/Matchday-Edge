@@ -153,6 +153,20 @@ def main():
         goals[key] = g
     ev["goals"] = goals
 
+    # ---- 1st half: chance a team is winning at half-time, before and after calibration
+    hp = []
+    for r in rows:
+        ht = r["result"].get("ht") or [None, None]
+        if r.get("h1raw") and r.get("h1probs") and ht[0] is not None:
+            for i, y in ((0, ht[0] > ht[1]), (2, ht[1] > ht[0])):
+                hp.append((r["h1raw"][i] / 100, r["h1probs"][i] / 100, 1 if y else 0))
+    if hp:
+        rate = sum(y for _, _, y in hp) / len(hp)
+        ev["half"] = {"n": len(hp), "rate": pct(rate),
+                      "raw": round(sum(brier2(a, y) for a, _, y in hp) / len(hp), 4),
+                      "calibrated": round(sum(brier2(c, y) for _, c, y in hp) / len(hp), 4),
+                      "average": round(sum(brier2(rate, y) for _, _, y in hp) / len(hp), 4)}
+
     # ---- betting simulation: the app's value-bet rule at Bet365 pre-match odds
     ev["betting"] = simulate(rows, outs, lambda r: (r["probs"], r["over25"]))
 
