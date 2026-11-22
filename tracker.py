@@ -95,7 +95,8 @@ def lock_today(now, preds, news, odds):
 
 def grade(day, res, now):
     for p in day["parlays"]:
-        if p["status"] != "pending":
+        # keep marking every pick, even after the parlay is decided, so the Record tab shows each one
+        if p["status"] != "pending" and all(l["result"] is not None for l in p["legs"]):
             continue
         for l in p["legs"]:
             if l["result"] is not None:
