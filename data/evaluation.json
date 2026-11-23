@@ -1,12 +1,12 @@
 {
- "games": 1020,
+ "games": 1024,
  "result": {
   "model": 52.6,
-  "alwaysHome": 44.1
+  "alwaysHome": 44.0
  },
  "brier": {
-  "model": 0.5828,
-  "average": 0.6436
+  "model": 0.5832,
+  "average": 0.6438
  },
  "vsBook": {
   "games": 886,
@@ -18,26 +18,26 @@
  "goals": {
   "over25": {
    "rate": 60.4,
-   "average": 0.2392,
+   "average": 0.2393,
    "model": 0.2374,
-   "raw": 0.2402,
+   "raw": 0.2401,
    "book": 0.2342,
    "modelOnBookGames": 0.2402,
    "bookGames": 886
   },
   "btts": {
    "rate": 58.2,
-   "average": 0.2432,
-   "model": 0.2416,
-   "raw": 0.2422
+   "average": 0.2433,
+   "model": 0.2415,
+   "raw": 0.2421
   }
  },
  "half": {
-  "n": 2040,
-  "rate": 29.9,
-  "raw": 0.1991,
-  "calibrated": 0.1995,
-  "average": 0.2096
+  "n": 2048,
+  "rate": 29.8,
+  "raw": 0.1988,
+  "calibrated": 0.1992,
+  "average": 0.2093
  },
  "betting": {
   "favourite": {
