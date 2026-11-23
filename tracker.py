@@ -85,7 +85,7 @@ def lock_today(now, preds, news, odds):
         return None
     parlays = []
     for t in pl.build_tiers(soon):
-        parlays.append(make_parlay("tier", f"{t['target']:,} odds tier", t["legs"], odds, t["target"]))
+        parlays.append(make_parlay("tier", f"1-in-{t['target']:,} tier", t["legs"], odds, t["target"]))
     risk = pl.build_risk(soon)
     parlays.append(make_parlay("safe", "Safe parlay", risk["safe"], odds))
     parlays.append(make_parlay("bold", "Bold parlay", risk["bold"], odds))

@@ -219,13 +219,13 @@ FAMILY = {"1": "win", "2": "win", "1X": "dc", "X2": "dc", "O15": "goals", "O25":
 
 def candidates(m):
     """Every pick we'd consider for a game: favourite to win, favourite or draw, over 1.5 / 2.5
-    goals, favourite winning the 1st half (clubs only: needs half-time scores)."""
+    goals, both teams score, favourite winning the 1st half (clubs only: needs half-time scores)."""
     fav, f = favourite(m), m["ft"]
     opts = [leg(m, fav["winMarket"], f"{fav['name']} to win", fav["win"]),
             leg(m, fav["dcMarket"], f"{fav['name']} or draw", fav["dc"]),
             leg(m, "O15", "Over 1.5 goals", f["over15"]),
-            leg(m, "O25", "Over 2.5 goals", f["over25"])]
-    # Both teams to score is left out: back-testing showed no real skill there.
+            leg(m, "O25", "Over 2.5 goals", f["over25"]),
+            leg(m, "BTTS", "Both teams score", f["btts"])]
     if m.get("league") != "INT" and m.get("h1"):
         home = fav["winMarket"] == "1"
         opts.append(leg(m, "H1_1" if home else "H1_2", f"{fav['name']} to win 1st half",

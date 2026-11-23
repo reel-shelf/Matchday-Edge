@@ -265,6 +265,13 @@
   .bcode small { display: block; color: var(--muted); font-size: 11px; }
   .bcode .btn { padding: 6px 12px; font-size: 13px; }
   .pbtns { display: flex; gap: 8px; margin-top: 8px; }
+  .honest { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--card2); font-size: 13px; line-height: 1.4; }
+  .funonly { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: rgba(245,197,66,.1); color: var(--accent2); font-size: 13px; }
+  .rg { font-size: 13px; line-height: 1.45; border-color: rgba(245,197,66,.35); }
+  .mybets .bet { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .mybets .bbtns { display: flex; gap: 4px; align-items: center; flex: none; }
+  .mybets .bbtns button { border: 1px solid var(--line); background: var(--card2); color: var(--text); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+  .mybets .pos { color: var(--accent); } .mybets .neg { color: var(--bad); }
   .pbtns .btn { flex: 1; padding: 8px 6px; font-size: 13px; }
   .ck { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; }
   .ck:first-of-type { border-top: 0; }
@@ -336,7 +343,7 @@
   <div class="odds" id="slipTotal"></div>
   <div class="btnrow"><button class="btn ghost" id="closeSlip">Close</button></div>
 </div></div>
-<footer>Predictions come from a statistical model and are for entertainment only. Not betting advice.</footer>
+<footer>Predictions come from a statistical model and are for entertainment only. Not betting advice. We have not shown we can beat the bookmakers, and long parlays lose money for most people. Bet only what you can afford to lose, 18+ only. Set limits under Responsible Gaming in your betting account.</footer>
 
 <script>
 const LEAGUES = { PL: "Premier League", PD: "La Liga", SA: "Serie A", BL1: "Bundesliga", FL1: "Ligue 1",
@@ -448,7 +455,22 @@ function bookTotal(legs) {
   return legs.length && ps.every(Boolean) ? ps.reduce((x, y) => x * y, 1) : null;
 }
 const books = legs => [...new Set(legs.map(l => bookName(l.m)))].join(" / ");
+// Plain-language reality check shown on every parlay: how many slips like this win, and what
+// you get back on average. Payout is the bookmaker's total if every pick is priced, otherwise
+// the estimate fair x 0.96 per pick (JustBet pays about 4% under fair on each pick).
+function payoutOf(legs, fair) { return bookTotal(legs) || Math.max(1, fair * Math.pow(0.96, legs.length)); }
+function honestLines(legs, fair) {
+  const c = 1 / fair, pay = payoutOf(legs, fair), back = c * pay * 100;
+  const wins = c >= 0.015 ? `About <b>${Math.round(c * 100)} out of 100</b> slips like this win.`
+    : `About <b>1 in ${Math.round(1 / c).toLocaleString()}</b> slips like this win${c < 0.005 ? ". Almost every one loses" : ""}.`;
+  const ret = back < 99 ? `On average you get back about <b>$${Math.round(back)} for every $100</b> you stake (a loss of about $${Math.round(100 - back)}).`
+    : `On average you'd get back about <b>$${Math.round(back)} for every $100</b>, but only if our chances are right. We haven't proven we beat the bookmaker.`;
+  return `<div class="honest">${wins} ${ret}</div>`;
+}
 function oddsSummary(legs, fair) {
+  return oddsLines(legs, fair) + honestLines(legs, fair);
+}
+function oddsLines(legs, fair) {
   const bk = bookTotal(legs);
   // No bookmaker total: give a rough idea of what a bookmaker pays. On a real 15-pick JustBet slip,
   // well-priced picks paid about 4% less than fair each, and that compounds over many picks.
@@ -801,6 +823,9 @@ async function editManual(fn, label) {
 const parlayLegs = {};
 const legSig = legs => legs.map(l => `${l.m.id}:${l.k}`).join("|");
 const codeFor = key => (codesLocal.codes || {})[key] || (codes.codes || {})[key];
+const logInfo = {};
+const logBtn = (key, title, legs, fair) => (logInfo[key] = { title, odds: +payoutOf(legs, fair).toFixed(2) },
+  `<button class="btn ghost askbtn" data-logbet="${key}">📝 Log this bet in My bets</button>`);
 function bookingRow(key, legs) {
   parlayLegs[key] = legs;
   const e = codeFor(key), sig = legSig(legs), token = loadLS("ghToken", "");
@@ -943,7 +968,7 @@ function quickAdd(m) {
     const on = slip.some(s => s.id === m.id && s.k === k);
     return `<button data-add="${m.id}:${k}" class="${on ? "on" : ""}">${on ? "✓" : "+"} ${esc(text)}</button>`;
   };
-  return `<div class="qadd"><span>Add to my parlay:</span>${b("1", m.home.name)}${b("X", "Draw")}${b("2", m.away.name)}</div>`;
+  return `<div class="qadd"><span>Add to my parlay:</span>${b("1", m.home.name)}${b("X", "Draw")}${b("2", m.away.name)}${b("BTTS", `Both teams score (${m.ft.btts}%)`).replace("<button", '<button style="flex-basis:100%"')}</div>`;
 }
 // The bookmaker's odds for this game on the card face: home, draw, away.
 function valueLine(m) {
@@ -1044,7 +1069,7 @@ function candidates(m) {
     { m, k: fav.dk, label: `${fav.name} or draw`, p: fav.dc },
     { m, k: "O15", label: "Over 1.5 goals", p: f.over15 },
     { m, k: "O25", label: "Over 2.5 goals", p: f.over25 },
-    // both teams to score is left out: back-testing showed no real skill there
+    { m, k: "BTTS", label: "Both teams score", p: f.btts },
     ...(f.h1 ? [{ m, k: h1k, label: `${fav.name} to win 1st half`, p: mprob(f, h1k) }] : []),
   ].filter(l => l.p > 1 && l.p < 99);
 }
@@ -1083,6 +1108,7 @@ function riskCard(kind, title, note, legs) {
     ${oddsSummary(legs, 1 / c)}
     ${shareBtn(kind, title, legs, 1 / c)}
     ${(checklistTitles[kind] = title, bookingRow(kind, legs))}
+    ${logBtn(kind, title, legs, 1 / c)}
   </div>`;
 }
 
@@ -1128,9 +1154,9 @@ function tierCard(games) {
   const fresh = prev ? prev.legs.length : 0;
   return `<div class="card tiers">
     <h3>Parlay tiers<span class="free">FREE</span></h3>
-    <div class="note" style="margin:2px 0 0">Climb the ladder: every tier keeps the picks below it and adds more.</div>
+    <div class="note" style="margin:2px 0 0">Climb the ladder: "1 in 100" means about 1 slip in 100 like it wins. Every tier keeps the picks below it and adds more.</div>
     <div class="ladder">${tiers.map((x, i) => `${i ? "<i>›</i>" : ""}<button data-tier="${x.target}"
-      class="${x.target === t.target ? "on" : ""}${x.ok ? "" : " na"}"><b>${x.target.toLocaleString()}</b>
+      class="${x.target === t.target ? "on" : ""}${x.ok ? "" : " na"}"><small>1 in</small><b>${x.target.toLocaleString()}</b>
       <small>${x.legs.length} picks</small></button>`).join("")}</div>
     <div class="meter"><div style="width:${Math.min(100, pos).toFixed(1)}%"></div></div>
     <div class="tstats">
@@ -1138,11 +1164,13 @@ function tierCard(games) {
       <div><b>${t.legs.length}</b><small>Picks</small></div>
       <div><b>${(100 / t.odds).toFixed(t.odds >= 100 ? 2 : 1)}%</b><small>Chance</small></div>
     </div>
+    ${t.target >= 100 ? `<div class="funonly">🎲 For fun only. About ${t.target >= 1000 ? "999 in 1,000" : "99 in 100"} slips like this lose. Stake only what you'd spend on a snack.</div>` : ""}
     ${t.ok ? "" : `<div class="note">Not enough upcoming games to reach ${t.target.toLocaleString()} odds yet. This is as high as it goes.</div>`}
     ${t.legs.map((l, i) => legRow(l, i >= fresh && prev ? `<span class="new">NEW</span>` : "")).join("")}
     ${oddsSummary(t.legs, t.odds)}
-    ${shareBtn("tier", `${t.target.toLocaleString()} odds parlay`, t.legs, t.odds)}
-    ${(checklistTitles["tier" + t.target] = `${t.target.toLocaleString()} odds parlay`, bookingRow("tier" + t.target, t.legs))}
+    ${shareBtn("tier", `1-in-${t.target.toLocaleString()} parlay`, t.legs, t.odds)}
+    ${(checklistTitles["tier" + t.target] = `1-in-${t.target.toLocaleString()} parlay`, bookingRow("tier" + t.target, t.legs))}
+    ${logBtn("tier" + t.target, `1-in-${t.target.toLocaleString()} parlay`, t.legs, t.odds)}
   </div>`;
 }
 
@@ -1164,6 +1192,7 @@ function slipCard() {
     <div class="btnrow"><button class="btn ghost" data-clear="1">Clear</button>${shareBtn("mine", "My parlay", legs, 1 / chance).replace("sharebtn", "").replace(" this parlay", "")}</div>
     <div class="pbtns">${checklistBtn("mine", "My parlay", legs)}</div>
     <button class="btn ghost askbtn" data-ask-parlay="mine">✨ Ask Claude about my parlay</button>
+    ${logBtn("mine", "My parlay", legs, 1 / chance)}
   </div>`;
 }
 
@@ -1179,6 +1208,11 @@ function windowPicker() {
   return `<div class="sizes" style="margin:0 0 10px">${Object.entries(WINDOWS).map(([k, [label]]) =>
     `<button data-window="${k}" class="${k === gameWindow ? "on" : ""}">${label}</button>`).join("")}</div>`;
 }
+function safeNote() {
+  return `<div class="card rg"><b>Bet with your head.</b> Parlays with many picks lose money for most people over time: the
+    bookmaker takes a small cut on every pick, and it adds up. Only bet what you can afford to lose, set deposit and loss
+    limits under Responsible Gaming in your betting account, and log your bets in <b>My bets</b> (Record tab) to see your real results.</div>`;
+}
 function renderParlay() {
   const end = windowEnd();
   const soon = data.matches.filter(m => showMatch(m) && enough(m) && new Date(m.date) > Date.now()
@@ -1186,10 +1220,10 @@ function renderParlay() {
   const label = WINDOWS[gameWindow][0].toLowerCase();
   if (soon.length < 3) return windowPicker() + slipCard() + `<div class="empty">Not enough games (${label}) to build a parlay. Try a longer window above.</div>`;
   const risk = buildRisk(soon);
-  return windowPicker() + slipCard()
+  return windowPicker() + safeNote() + slipCard()
     + riskCard("safe", "Safe parlay", "The most likely picks: wins most often, pays least", risk.safe)
     + riskCard("bold", "Bold parlay", "A mix of picks: about a 1 in 4 chance", risk.bold)
-    + riskCard("long", "Long Shot parlay", "Lots of mixed picks: rarely hits, pays big", risk.long)
+    + riskCard("long", "Long Shot parlay", "Lots of mixed picks: rarely hits, pays big. <b>For fun only</b>: stake only small change", risk.long)
     + tierCard(soon)
     + (news.updated ? `<div class="note">Team news checked ${esc(ago(news.updated))}. Games marked TEAM NEWS have odds adjusted for injuries, suspensions and lineups. Lineups are re-checked in the last 5 minutes before kick-off. Bookmaker odds are refreshed twice a day.</div>` : "")
     + `<div class="note">Only games where both teams have at least ${MIN_GAMES} recent games are used. "Real win chance" is our model's chance that every pick wins. Picks come from games ${label === "today & tomorrow" ? "today and tomorrow" : `in the next ${label}`} (${soon.length} games), one pick per game. Picks are combined as separate games, so the chance all win is each chance multiplied together. For entertainment only. If you bet, bet responsibly and only if you are of legal age.</div>`;
@@ -1271,7 +1305,7 @@ function modelScorecard() {
     `<div>Chances accuracy vs average chances</div><div><b class="${better(e.brier.model, e.brier.average) > 0 ? "pos" : "neg"}">${better(e.brier.model, e.brier.average)}% better</b></div><div></div>`,
     v ? `<div>Chances accuracy vs Bet365's</div><div><b class="${v.modelBrier <= v.bookBrier ? "pos" : "neg"}">${v.modelBrier <= v.bookBrier ? "better" : "worse"}</b></div><div class="note">${better(v.modelBrier, v.bookBrier)}%</div>` : "",
     o ? `<div>Over 2.5 goals chances</div><div><b class="${o.model < o.average ? "pos" : "neg"}">${o.model < o.average ? "some skill" : "no skill"}</b></div><div class="note">${o.book ? (o.modelOnBookGames <= o.book ? "≥ Bet365" : "< Bet365") : ""}</div>` : "",
-    b2 ? `<div>Both teams score chances</div><div><b class="${b2.model < b2.average ? "pos" : "neg"}">${b2.model < b2.average ? "some skill" : "no skill"}</b></div><div class="note">not used in parlays</div>` : "",
+    b2 ? `<div>Both teams score chances</div><div><b class="${b2.model < b2.average ? "pos" : "neg"}">${b2.model < b2.average ? "some skill" : "no skill"}</b></div><div class="note">used in parlays</div>` : "",
     bt && bt.bets ? `<div>Value bets at Bet365 odds</div><div><b class="${bt.roi >= 0 ? "pos" : "neg"}">${money(bt.roi)}</b></div><div class="note">${bt.bets} bets, ${bt.won} won</div>` : "",
     e.blended ? `<div>Blended with Bet365: chances accuracy</div><div><b class="${e.blended.brier <= e.blended.bookBrier ? "pos" : "neg"}">${e.blended.brier <= e.blended.bookBrier ? "≥ Bet365" : "< Bet365"}</b></div><div class="note">${better(e.blended.brier, e.blended.bookBrier)}% vs Bet365, ${better(e.blended.brier, e.blended.modelBrier)}% vs ours</div>` : "",
     e.bettingBlended && e.bettingBlended.all && e.bettingBlended.all.bets ? `<div>Value bets, blended chances</div><div><b class="${e.bettingBlended.all.roi >= 0 ? "pos" : "neg"}">${money(e.bettingBlended.all.roi)}</b></div><div class="note">${e.bettingBlended.all.bets} bets, ${e.bettingBlended.all.won} won</div>` : "",
@@ -1282,13 +1316,15 @@ function modelScorecard() {
     <div class="note" style="margin:8px 0 0">This season's ${e.games} games, each predicted only from earlier results. "Chances accuracy" is the Brier score: how close our chances were to what happened. Value bets: 1 unit on each pick where our chance is 35%+ and Bet365's pre-match odds pay 5–30% more than fair. Bet365 odds cover the domestic leagues only.</div></div>`;
 }
 
+// older days were saved as "1,000 odds tier"; show every tier with its plain name
+const pName = p => p.kind === "tier" && p.target ? `1-in-${p.target.toLocaleString()} tier` : p.name;
 function parlayRecord() {
   const days = Object.entries(parlayHist.days || {}).sort((a, b) => b[0].localeCompare(a[0]));
   let html = `<div class="day">Parlays</div>`;
   if (!days.length) return html + `<div class="note">Every day at 12:00 UTC the app locks in its parlays and checks them against the real results. The first ones will show up here.</div>`;
   const groups = {};
   for (const [, d] of days) for (const p of d.parlays) {
-    const g = groups[p.name] ??= { n: 0, won: 0, ret: 0, book: true, pending: 0, order: { safe: 1, bold: 2, long: 3, short: 4, big: 5 }[p.kind] ?? 5 + p.target };
+    const g = groups[pName(p)] ??= { n: 0, won: 0, ret: 0, book: true, pending: 0, order: { safe: 1, bold: 2, long: 3, short: 4, big: 5 }[p.kind] ?? 5 + p.target };
     if (p.status === "pending") { g.pending++; continue; }
     if (p.status !== "won" && p.status !== "lost") continue;
     g.n++; if (!p.book) g.book = false;
@@ -1306,7 +1342,7 @@ function parlayRecord() {
   html += `<div class="card">` + days.slice(0, 7).map(([day, d]) => `<div class="pday" style="display:block">
       <div style="color:var(--muted);font-size:12px;margin-bottom:4px">${esc(new Date(day + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }))}</div>
       ${d.parlays.map(p => `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0">
-        <span>${esc(p.name)} <span class="note">${p.legs.map(l => icon(l.result)).join("")}</span></span>
+        <span>${esc(pName(p))} <span class="note">${p.legs.map(l => icon(l.result)).join("")}</span></span>
         <span class="st ${p.status}">${p.status === "pending" ? "PENDING" : p.status.toUpperCase()}</span></div>`).join("")}
     </div>`).join("") + `</div>`;
   return html;
@@ -1333,11 +1369,46 @@ function newsRecord() {
     </div><div class="note" style="margin:8px 0 0">${better ? "So far, adjusting for team news makes the chances more accurate." : "So far, the team-news adjustment isn't making the chances more accurate."} Early results with few games can swing either way.</div></div>`;
 }
 
+// ---------------------------------------------------------------- My bets (this phone only)
+let myBets = loadLS("myBets", []);
+function addBet(title, odds) {
+  const stake = prompt(`How much did you stake on "${title}"?`, "");
+  if (stake === null) return;
+  const st = parseFloat(String(stake).replace(/[^0-9.]/g, ""));
+  if (!(st > 0)) { toast("Enter the amount you staked"); return; }
+  const o = prompt("Total odds on your bet slip (check the slip: the bookmaker's number is what counts)", odds ? String(odds) : "");
+  if (o === null) return;
+  const od = parseFloat(o);
+  if (!(od > 1)) { toast("Enter the slip's total odds, like 4.5"); return; }
+  myBets.unshift({ id: Date.now(), date: new Date().toISOString().slice(0, 10), title, stake: st, odds: od, status: "pending" });
+  saveLS("myBets", myBets); toast("Saved to My bets (Record tab)"); rerender();
+}
+function myBetsCard() {
+  const done = myBets.filter(b => b.status !== "pending");
+  const staked = done.reduce((s, b) => s + b.stake, 0);
+  const back = done.reduce((s, b) => s + (b.status === "won" ? b.stake * b.odds : b.status === "void" ? b.stake : 0), 0);
+  const won = done.filter(b => b.status === "won").length, profit = back - staked;
+  const money = n => (n < 0 ? "-" : "") + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  let html = `<div class="day">My bets</div><div class="card mybets">`;
+  html += done.length ? `<div class="tstats">
+      <div><b>${money(staked)}</b><small>Staked</small></div>
+      <div><b>${money(back)}</b><small>Got back</small></div>
+      <div><b class="${profit >= 0 ? "pos" : "neg"}">${profit >= 0 ? "+" : ""}${money(profit)}</b><small>Profit</small></div></div>
+    <div class="note" style="margin:0 0 6px">${won} of ${done.length} settled bets won.${profit < 0 ? " Down overall: think about smaller stakes or fewer picks per slip." : ""}</div>`
+    : `<div class="note" style="margin:0 0 6px">Keep track of what you really bet and win. Tap <b>📝 Log this bet</b> under any parlay, or add one here. Saved on this phone only.</div>`;
+  html += myBets.slice(0, 30).map(b => `<div class="bet">
+      <div><div>${esc(b.title)}</div><div class="note" style="margin:0">${esc(b.date)} · stake ${money(b.stake)} @ ${b.odds}${b.status === "won" ? ` · got back ${money(b.stake * b.odds)}` : ""}</div></div>
+      <div class="bbtns">${b.status === "pending"
+        ? `<button data-bet="${b.id}:won">Won</button><button data-bet="${b.id}:lost">Lost</button>`
+        : `<span class="st ${b.status}">${b.status.toUpperCase()}</span><button data-bet="${b.id}:pending" aria-label="Undo">↺</button>`}
+        <button data-bet="${b.id}:del" aria-label="Delete">×</button></div></div>`).join("");
+  return html + `<button class="btn ghost askbtn" data-logbet="manual">+ Add a bet</button></div>`;
+}
 function renderResults() {
   const mark = (ok, label) => ok === undefined ? "" : `<span class="mark ${ok ? "ok" : "no"}">${ok ? "✓" : "✗"} ${label}</span>`;
   const live = Object.values(history.matches).filter(r => r.result && inLeague(r.league))
     .sort((a, b) => b.date.localeCompare(a.date));
-  let html = modelScorecard() + parlayRecord() + newsRecord() + `<div class="day">Live picks</div>`;
+  let html = myBetsCard() + modelScorecard() + parlayRecord() + newsRecord() + `<div class="day">Live picks</div>`;
   if (!live.length) {
     html += `<div class="note">No graded live picks yet. Each prediction is locked in before kick-off and checked against the real score after the match.</div>`;
   } else {
@@ -1477,6 +1548,15 @@ document.getElementById("view").onclick = e => {
   if (cs) { setCode(cs.dataset.codeSet); return; }
   const sh = e.target.closest("[data-share]");
   if (sh) { share(shareTexts[sh.dataset.share]); return; }
+  const lb = e.target.closest("[data-logbet]");
+  if (lb) { const i = logInfo[lb.dataset.logbet]; addBet(i ? i.title : (prompt("What's the bet? (e.g. booking code or a name)", "") || "").trim() || "My bet", i && i.odds); return; }
+  const bt = e.target.closest("[data-bet]");
+  if (bt) {
+    const [id, act] = bt.dataset.bet.split(":");
+    if (act === "del") { if (!confirm("Delete this bet?")) return; myBets = myBets.filter(b => b.id !== +id); }
+    else myBets = myBets.map(b => b.id === +id ? { ...b, status: act } : b);
+    saveLS("myBets", myBets); rerender(); return;
+  }
   const add = e.target.closest("[data-add]");
   if (add) {
     const [id, k] = add.dataset.add.split(":"), had = slip.some(s => s.id === +id && s.k === k);
