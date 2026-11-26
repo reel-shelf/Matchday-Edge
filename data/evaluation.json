@@ -9,11 +9,11 @@
   "average": 0.6438
  },
  "vsBook": {
-  "games": 955,
-  "modelRight": 51.5,
-  "bookRight": 53.6,
-  "modelBrier": 0.5883,
-  "bookBrier": 0.578
+  "games": 967,
+  "modelRight": 51.6,
+  "bookRight": 53.5,
+  "modelBrier": 0.5884,
+  "bookBrier": 0.5786
  },
  "goals": {
   "over25": {
@@ -21,9 +21,9 @@
    "average": 0.24,
    "model": 0.2384,
    "raw": 0.241,
-   "book": 0.2342,
-   "modelOnBookGames": 0.2409,
-   "bookGames": 955
+   "book": 0.2343,
+   "modelOnBookGames": 0.2412,
+   "bookGames": 967
   },
   "btts": {
    "rate": 57.8,
@@ -41,52 +41,52 @@
  },
  "betting": {
   "favourite": {
-   "bets": 955,
-   "won": 512,
-   "profit": -41.23,
-   "roi": -4.3
+   "bets": 967,
+   "won": 517,
+   "profit": -43.78,
+   "roi": -4.5
   },
   "result": {
-   "bets": 222,
-   "won": 93,
-   "profit": -7.95,
-   "roi": -3.6
+   "bets": 228,
+   "won": 96,
+   "profit": -5.95,
+   "roi": -2.6
   },
   "all": {
-   "bets": 611,
-   "won": 305,
-   "profit": -13.35,
-   "roi": -2.2
+   "bets": 622,
+   "won": 310,
+   "profit": -12.25,
+   "roi": -2.0
   },
   "O25": {
-   "bets": 389,
-   "won": 212,
-   "profit": -5.4,
-   "roi": -1.4
+   "bets": 394,
+   "won": 214,
+   "profit": -6.3,
+   "roi": -1.6
   }
  },
  "blended": {
-  "games": 844,
+  "games": 856,
   "weights": {
-   "result": 0.05,
+   "result": 0.1,
    "goals": 0.0
   },
-  "right": 54.5,
-  "brier": 0.5767,
-  "bookBrier": 0.576,
-  "modelBrier": 0.5867,
+  "right": 54.3,
+  "brier": 0.5775,
+  "bookBrier": 0.5768,
+  "modelBrier": 0.5868,
   "over25": {
    "blend": 0.2351,
    "book": 0.2349,
-   "model": 0.2413
+   "model": 0.2416
   }
  },
  "bettingBlended": {
   "favourite": {
-   "bets": 844,
-   "won": 456,
-   "profit": -29.32,
-   "roi": -3.5
+   "bets": 856,
+   "won": 461,
+   "profit": -31.87,
+   "roi": -3.7
   },
   "result": {
    "bets": 1,
